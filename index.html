@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Rock Paper Scissors</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        .game-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            text-align: center;
+            width: 100%;
+            max-width: 500px;
+            box-sizing: border-box;
+            border: 1px solid #e0e0e0;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 25px;
+            font-size: 2.2em;
+        }
+
+        .score-board {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 30px;
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .score-board span {
+            color: #007bff;
+        }
+
+        .choices {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-bottom: 30px;
+            min-height: 100px;
+        }
+
+        .choice-display {
+            font-size: 3em;
+            width: 100px;
+            height: 100px;
+            background-color: #e9ecef;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 2px solid #ced4da;
+            transition: transform 0.3s ease, opacity 0.3s ease, background-color 0.3s ease;
+            opacity: 0.7;
+            transform: scale(0.9);
+            color: #6c757d;
+        }
+
+        .choice-display.active {
+            opacity: 1;
+            transform: scale(1.1);
+            background-color: #d1ecf1; /* Light blue background for active choice */
+            border-color: #007bff;
+            color: #007bff;
+        }
+
+        .choices .vs {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #888;
+        }
+
+        #result {
+            font-size: 1.6em;
+            font-weight: bold;
+            margin-bottom: 35px;
+            color: #444;
+            min-height: 2em; /* Ensure space even when empty */
+            transition: color 0.3s ease;
+        }
+
+        #result.player-win { color: #28a745; } /* Green */
+        #result.computer-win { color: #dc3545; } /* Red */
+        #result.tie { color: #ffc107; } /* Yellow */
+
+
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .buttons button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1.1em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
+            font-weight: 600;
+        }
+
+        .buttons button:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .buttons button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 5px rgba(0, 123, 255, 0.3);
+        }
+
+        .buttons button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Rock Paper Scissors</h1>
+
+        <div class="score-board">
+            <div>Player: <span id="player-score">0</span></div>
+            <div>Computer: <span id="computer-score">0</span></div>
+        </div>
+
+        <div class="choices">
+            <div id="player-choice" class="choice-display">?</div>
+            <div class="vs">vs</div>
+            <div id="computer-choice" class="choice-display">?</div>
+        </div>
+
+        <p id="result">Choose your move!</p>
+
+        <div class="buttons">
+            <button data-choice="rock">✊ Rock</button>
+            <button data-choice="paper">✋ Paper</button>
+            <button data-choice="scissors">✌️ Scissors</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000"; // Ensure this matches your FastAPI server address
+
+        const playerScoreSpan = document.getElementById('player-score');
+        const computerScoreSpan = document.getElementById('computer-score');
+        const playerChoiceDiv = document.getElementById('player-choice');
+        const computerChoiceDiv = document.getElementById('computer-choice');
+        const resultP = document.getElementById('result');
+        const choiceButtons = document.querySelectorAll('.buttons button');
+
+        let playerScore = 0;
+        let computerScore = 0;
+        let gameActive = true;
+
+        const choiceEmojis = {
+            rock: '✊',
+            paper: '✋',
+            scissors: '✌️'
+        };
+
+        function resetChoicesDisplay() {
+            playerChoiceDiv.textContent = '?';
+            playerChoiceDiv.classList.remove('active');
+            computerChoiceDiv.textContent = '?';
+            computerChoiceDiv.classList.remove('active');
+            resultP.textContent = 'Choose your move!';
+            resultP.classList.remove('player-win', 'computer-win', 'tie');
+        }
+
+        function setButtonsDisabled(disabled) {
+            choiceButtons.forEach(button => {
+                button.disabled = disabled;
+            });
+        }
+
+        choiceButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (!gameActive) return;
+
+                const playerMove = button.dataset.choice;
+                playGame(playerMove);
+            });
+        });
+
+        async function playGame(playerMove) {
+            gameActive = false;
+            setButtonsDisabled(true);
+
+            // Temporarily show player's choice and a thinking state for computer
+            playerChoiceDiv.textContent = choiceEmojis[playerMove];
+            playerChoiceDiv.classList.add('active');
+            computerChoiceDiv.textContent = '...';
+            computerChoiceDiv.classList.add('active');
+            resultP.textContent = 'Making moves...';
+            resultP.classList.remove('player-win', 'computer-win', 'tie');
+
+
+            try {
+                const response = await fetch(`${API_URL}/play?player_move=${playerMove}`);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Something went wrong!');
+                }
+                const data = await response.json();
+
+                // Display computer's choice after a short delay for animation feel
+                setTimeout(() => {
+                    playerChoiceDiv.textContent = choiceEmojis[data.player_move];
+                    computerChoiceDiv.textContent = choiceEmojis[data.computer_move];
+
+                    let resultText = '';
+                    switch (data.winner) {
+                        case 'player':
+                            resultText = 'You Win!';
+                            playerScore++;
+                            playerScoreSpan.textContent = playerScore;
+                            resultP.classList.add('player-win');
+                            break;
+                        case 'computer':
+                            resultText = 'Computer Wins!';
+                            computerScore++;
+                            computerScoreSpan.textContent = computerScore;
+                            resultP.classList.add('computer-win');
+                            break;
+                        case 'tie':
+                            resultText = 'It\'s a Tie!';
+                            resultP.classList.add('tie');
+                            break;
+                    }
+                    resultP.textContent = resultText;
+
+                    // Reset for next round after a delay
+                    setTimeout(() => {
+                        resetChoicesDisplay();
+                        gameActive = true;
+                        setButtonsDisabled(false);
+                    }, 1500); // Wait 1.5 seconds before resetting
+                }, 500); // Wait 0.5 seconds before revealing computer's choice
+            } catch (error) {
+                console.error("Error playing game:", error);
+                resultP.textContent = `Error: ${error.message}`;
+                resultP.classList.remove('player-win', 'computer-win', 'tie'); // Clear any previous result styling
+                computerChoiceDiv.textContent = '?'; // Reset computer choice if error
+                gameActive = true;
+                setButtonsDisabled(false);
+            }
+        }
+
+        // Initial setup
+        resetChoicesDisplay();
+    </script>
+</body>
+</html>
